@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -13,7 +13,24 @@ namespace Il2CppDumper
         [STAThread]
         static void Main(string[] args)
         {
-            config = JsonSerializer.Deserialize<Config>(File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + @"config.json"));
+            var cfgPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+            if (File.Exists(cfgPath))
+            {
+                try
+                {
+                    config = JsonSerializer.Deserialize<Config>(File.ReadAllText(cfgPath));
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"WARNING: Failed to read config.json, using defaults. Details: {e.Message}");
+                    config = new Config();
+                }
+            }
+            else
+            {
+                Console.WriteLine("WARNING: config.json not found, using default configuration.");
+                config = new Config();
+            }
             string il2cppPath = null;
             string metadataPath = null;
             string outputDir = null;
@@ -51,6 +68,10 @@ namespace Il2CppDumper
                     {
                         outputDir = Path.GetFullPath(arg) + Path.DirectorySeparatorChar;
                     }
+                    else
+                    {
+                        Console.WriteLine($"WARNING: Path not found: {arg}");
+                    }
                 }
             }
             outputDir ??= AppDomain.CurrentDomain.BaseDirectory;
@@ -81,6 +102,13 @@ namespace Il2CppDumper
                     }
                 }
             }
+            // If non-Windows or args insufficient, provide interactive CLI prompts
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && (il2cppPath == null || metadataPath == null))
+            {
+                Console.WriteLine("Interactive mode: provide paths to required files.");
+                PromptForPaths(ref il2cppPath, ref metadataPath, ref outputDir);
+            }
+
             if (il2cppPath == null)
             {
                 ShowHelp();
@@ -88,12 +116,37 @@ namespace Il2CppDumper
             }
             if (metadataPath == null)
             {
-                Console.WriteLine($"ERROR: Metadata file not found or encrypted.");
+                Console.WriteLine("ERROR: Metadata file not found. Please specify a valid path to global-metadata.dat.");
             }
             else
             {
                 try
                 {
+                    // Validate provided paths before processing
+                    if (!File.Exists(il2cppPath))
+                    {
+                        Console.WriteLine($"ERROR: Il2Cpp binary file not found: {il2cppPath}");
+                        return;
+                    }
+                    if (!File.Exists(metadataPath))
+                    {
+                        Console.WriteLine($"ERROR: Metadata file not found: {metadataPath}");
+                        return;
+                    }
+                    if (!IsValidMetadata(metadataPath))
+                    {
+                        Console.WriteLine("ERROR: Metadata file supplied is not valid metadata file.");
+                        return;
+                    }
+                    try
+                    {
+                        Directory.CreateDirectory(outputDir);
+                    }
+                    catch (Exception)
+                    {
+                        Console.WriteLine($"ERROR: Unable to create or access output directory: {outputDir}");
+                        return;
+                    }
                     if (Init(il2cppPath, metadataPath, out var metadata, out var il2Cpp))
                     {
                         Dump(metadata, il2Cpp, outputDir);
@@ -113,7 +166,10 @@ namespace Il2CppDumper
 
         static void ShowHelp()
         {
-            Console.WriteLine($"usage: {AppDomain.CurrentDomain.FriendlyName} <executable-file> <global-metadata> <output-directory>");
+            Console.WriteLine("Il2CppDumper - Unity il2cpp reverse engineering helper\n");
+            Console.WriteLine($"Usage:\n  {AppDomain.CurrentDomain.FriendlyName} <il2cpp-binary> <global-metadata.dat> <output-directory>\n");
+            Console.WriteLine("Examples:\n  Il2CppDumper GameAssembly.dll global-metadata.dat ./out\n  Il2CppDumper libil2cpp.so global-metadata.dat /tmp/dump\n");
+            Console.WriteLine("Notes:\n  - On Windows, a file picker will open if arguments are not provided.\n  - On Linux/macOS, an interactive prompt will ask for paths when arguments are missing.\n");
         }
 
         private static bool Init(string il2cppPath, string metadataPath, out Metadata metadata, out Il2Cpp il2Cpp)
@@ -270,6 +326,73 @@ namespace Il2CppDumper
                 Console.WriteLine("Generate dummy dll...");
                 DummyAssemblyExporter.Export(executor, outputDir, config.DummyDllAddToken);
                 Console.WriteLine("Done!");
+            }
+        }
+
+        private static void PromptForPaths(ref string il2cppPath, ref string metadataPath, ref string outputDir)
+        {
+            while (string.IsNullOrWhiteSpace(il2cppPath))
+            {
+                Console.Write("Path to il2cpp binary (e.g., GameAssembly.dll or libil2cpp.so): ");
+                var input = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(input) && File.Exists(input))
+                {
+                    il2cppPath = input;
+                }
+                else
+                {
+                    Console.WriteLine("Invalid path. Please try again.");
+                }
+            }
+            while (string.IsNullOrWhiteSpace(metadataPath))
+            {
+                Console.Write("Path to global-metadata.dat: ");
+                var input = Console.ReadLine();
+                if (!string.IsNullOrWhiteSpace(input) && File.Exists(input))
+                {
+                    if (IsValidMetadata(input))
+                    {
+                        metadataPath = input;
+                    }
+                    else
+                    {
+                        Console.WriteLine("The provided file does not look like a valid metadata file (global-metadata.dat). Please try again.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Invalid path. Please try again.");
+                }
+            }
+            if (string.IsNullOrWhiteSpace(outputDir))
+            {
+                Console.Write($"Output directory [{AppDomain.CurrentDomain.BaseDirectory}]: ");
+                var input = Console.ReadLine();
+                outputDir = string.IsNullOrWhiteSpace(input) ? AppDomain.CurrentDomain.BaseDirectory : Path.GetFullPath(input);
+            }
+            try
+            {
+                Directory.CreateDirectory(outputDir);
+            }
+            catch (Exception)
+            {
+                Console.WriteLine($"ERROR: Unable to create or access output directory: {outputDir}");
+                throw;
+            }
+        }
+
+        private static bool IsValidMetadata(string path)
+        {
+            try
+            {
+                using var fs = File.OpenRead(path);
+                var buf = new byte[4];
+                if (fs.Read(buf, 0, 4) != 4) return false;
+                return BitConverter.ToUInt32(buf, 0) == 0xFAB11BAF;
+            }
+            catch
+            {
+                return false;
             }
         }
     }
