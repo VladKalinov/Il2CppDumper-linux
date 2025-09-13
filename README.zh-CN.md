@@ -26,6 +26,35 @@ Unity il2cpp逆向工程
 Il2CppDumper.exe <executable-file> <global-metadata> <output-directory>
 ```
 
+### Linux CLI（framework-dependent）
+
+在 Linux 上，推荐使用“依赖运行时（framework-dependent）”的方式运行（需要安装 .NET）。步骤如下：
+
+1) 安装 .NET SDK（使用 snap，快速方式）：
+
+```
+sudo snap install dotnet-sdk --classic
+sudo snap alias dotnet-sdk.dotnet dotnet
+```
+
+2) 发布（linux-x64，net8.0）：
+
+```
+dotnet publish Il2CppDumper/Il2CppDumper.csproj -c Release -f net8.0 -r linux-x64 --self-contained false -o ./publish/linux-x64/fdd
+```
+
+3) 运行：
+
+```
+dotnet ./publish/linux-x64/fdd/Il2CppDumper.dll <il2cpp-binary> <global-metadata.dat> <output-directory>
+```
+
+说明：
+
+- 在 Linux/macOS 上如果不带参数运行，程序会进入交互模式，提示输入所需路径。
+- `linux-x64` 平台下的 self-contained 单文件在 snap 环境可能遇到 glibc 版本问题，建议优先使用 framework-dependent 方案。
+- 如果需要更接近“静态”的方案，可考虑构建 `linux-musl-x64` 并在 Alpine/musl 系统上运行。
+
 ### 输出文件
 
 #### DummyDll
