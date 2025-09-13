@@ -28,6 +28,34 @@ The program will then generate all the output files in current working directory
 Il2CppDumper.exe <executable-file> <global-metadata> <output-directory>
 ```
 
+### Linux CLI (framework-dependent)
+
+On Linux, you can run the tool with .NET installed (framework-dependent). Recommended steps:
+
+1. Install .NET SDK (snap, quick way):
+
+```
+sudo snap install dotnet-sdk --classic
+sudo snap alias dotnet-sdk.dotnet dotnet
+```
+
+2. Publish (linux-x64, net8.0):
+
+```
+dotnet publish Il2CppDumper/Il2CppDumper.csproj -c Release -f net8.0 -r linux-x64 --self-contained false -o ./publish/linux-x64/fdd
+```
+
+3. Run:
+
+```
+dotnet ./publish/linux-x64/fdd/Il2CppDumper.dll <il2cpp-binary> <global-metadata.dat> <output-directory>
+```
+
+Notes:
+
+- If you run without arguments on Linux/macOS, an interactive prompt will ask for paths.
+- Self-contained single-file builds under `linux-x64` may hit glibc version issues in snap environments. Prefer framework-dependent on typical Ubuntu desktop. For fully static-like builds, consider `linux-musl-x64` and running on Alpine/musl systems.
+
 ### Outputs
 
 #### DummyDll
