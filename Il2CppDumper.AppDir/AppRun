@@ -1,0 +1,12 @@
+#!/bin/bash
+
+HERE="$(dirname "$(readlink -f "${0}")")"
+export PATH="${HERE}/usr/bin:${PATH}"
+export DOTNET_ROOT="${HERE}/usr/bin"
+
+# Если нет аргументов, запускаем диалог выбора файлов
+if [ $# -eq 0 ]; then
+    exec "${HERE}/file-picker.sh"
+else
+    exec "${HERE}/usr/bin/Il2CppDumper" "$@"
+fi

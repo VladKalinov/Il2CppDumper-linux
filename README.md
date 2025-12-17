@@ -28,6 +28,40 @@ The program will then generate all the output files in current working directory
 Il2CppDumper.exe <executable-file> <global-metadata> <output-directory>
 ```
 
+### Linux AppImage (GUI + CLI)
+
+A self-contained AppImage package with both GUI and CLI support:
+
+#### GUI Mode (New)
+1. Double-click `Il2CppDumper-x86_64.AppImage`
+2. Use the system file dialog to select:
+   - Il2cpp executable file
+   - global-metadata.dat file
+   - Output directory
+3. The program will automatically run with selected parameters
+
+**Requirements for GUI mode:**
+- `zenity` (for GTK/GNOME environments) or
+- `kdialog` (for KDE environments)
+
+Install on Fedora:
+```bash
+# For GTK/GNOME
+sudo dnf install zenity
+
+# For KDE
+sudo dnf install kde-runtime
+```
+
+#### CLI Mode (Standard)
+```bash
+./Il2CppDumper-x86_64.AppImage <executable-file> <global-metadata> <output-directory>
+```
+
+The AppImage automatically detects the mode:
+- **No arguments**: Launch GUI file picker
+- **With arguments**: Run in CLI mode
+
 ### Linux CLI (framework-dependent)
 
 On Linux, you can run the tool with .NET installed (framework-dependent). Recommended steps:
